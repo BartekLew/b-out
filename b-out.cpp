@@ -1,5 +1,8 @@
 #include <SDL.h>
+#include <vector>
 #include <cstdlib>
+
+using namespace std;
 
 void fatal() {
 	fprintf (stderr, "b-out: %s\n", SDL_GetError());
@@ -7,9 +10,12 @@ void fatal() {
    	exit(EXIT_FAILURE);
 }
 
-class Drawable {
+class Playground;
+
+class Toy {
 	public:
 	virtual void draw(SDL_Renderer *renderer) = 0;
+	virtual void on_dt(Playground &pg, uint dt) = 0;
 };
 
 class Playground {
@@ -21,10 +27,8 @@ class Playground {
 			width, height, 0, &window, &renderer
 		) != 0) fatal();
 
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		SDL_RenderClear(renderer);
-
-		SDL_RenderPresent(renderer);
+		newFrame();
+		show();
     }
 
 	~Playground() {
@@ -33,17 +37,50 @@ class Playground {
 		SDL_Quit();
 	}
 
-	void put(Drawable &d) {
+	Playground& with(Toy &d) {
+		toys.push_back(&d);
 		d.draw(renderer);
+		SDL_RenderPresent(renderer);
+
+		return *this;
+	}
+
+	void play() {
+		bool done = false;
+		while(!done) {
+			SDL_Event e;
+			while(SDL_PollEvent(&e) != 0) {
+				if(e.type == SDL_KEYDOWN)
+					done = true;
+			}
+
+			newFrame();
+			for(Toy *toy : toys) {
+				toy->on_dt(*this, 1);
+				toy->draw(renderer);
+			}
+			show();
+		}
+	}
+
+	protected:
+	void newFrame() {
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+		SDL_RenderClear(renderer);
+	}
+
+	void show() {
 		SDL_RenderPresent(renderer);
 	}
 
 	private:
 	SDL_Window *window;
 	SDL_Renderer *renderer;
+
+	vector<Toy*> toys;
 };
 
-class Ball : public Drawable {
+class Ball : public Toy {
 	public:
 
 	void draw(SDL_Renderer *renderer) {
@@ -71,21 +108,34 @@ class Ball : public Drawable {
 
 		SDL_RenderDrawLine(renderer, x0 - r, y0, x0 + r, y0);
 	}
+	
+	void on_dt(Playground &pg, uint dt) {
+		x0 += vx * dt;
+		y0 += vy * dt;
+	}
+
 
 	Ball& at(uint x, uint y) {
 		x0 = x; y0 = y;
+
+		return *this;
+	}
+
+	Ball& moving(int x, int y) {
+		vx = x;
+		vy = y;
+
 		return *this;
 	}
 
 	private:
-	uint red = 0xff, green = 0xff, blue=0,
-		 x0 = 400, y0 = 300, r = 10;
+	uint red = 0xff, green = 0xff, blue=0, // color
+		 x0 = 400, y0 = 300, r = 10; // position & radious
+	int  vx = 0, vy = 0; // velocity vector
 };
+
 int main(int argc, char **argv) {
-	Playground pg(800,600);
-	Ball ball;
-
-	pg.put(ball.at(300,300));
-
-	SDL_Delay(2000);
+	Playground(800,600)
+		.with(Ball().at(300,300).moving(1, -1))
+		.play();
 }
