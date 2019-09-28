@@ -1,4 +1,4 @@
-CPP=g++ -Wall -pedantic
+CPP=g++ -Wall -pedantic -std=c++11
 HEADS=-I/usr/include/SDL2
 LIBS=-lSDL2
 
