@@ -18,9 +18,27 @@ class Toy {
 	virtual void on_dt(Playground &pg, uint dt) = 0;
 };
 
+class Collision {
+	public:
+	Collision(){}
+
+	Collision(uint x, uint y, int vx, int vy)
+		: really(true), x(x), y(y), vx(vx), vy(vy) {}
+
+	// really = true if colission happened
+	// x, y is the point of colission
+	// vx, vy is vector after bounce
+
+	const bool really = false;
+	const uint x = 0, y = 0;
+	const int vx = 0, vy = 0;
+};
+
 class Playground {
     public:
-    Playground(uint width, uint height) {
+    Playground(uint width, uint height)
+			:w(width), h(height) {
+
         if(SDL_Init(SDL_INIT_VIDEO) < 0) fatal();
 	    
 		if(SDL_CreateWindowAndRenderer(
@@ -63,6 +81,54 @@ class Playground {
 		}
 	}
 
+	Collision obstacle(uint x0, uint y0, uint x1, uint y1, uint r) { // This is simple case of straight obstacles as
+		// scene boundaries…
+
+		bool left = (int)x1 - r <= 0,
+			 top = (int)y1 - r <= 0,
+			 right = (int)x1 + r >= w,
+			 bottom = (int)y1 + r >= h;
+
+		if(!top && !left && !right && !bottom)
+			return Collision();
+
+		int dx = x1 - x0,
+			dy = y1 - y0;
+
+		if(dx == 0) {
+			if(dy > 0)
+				return Collision(x0, h-r, 0, -1);
+			else
+				return Collision(x0, r, 0, 1);
+		}
+
+		if(dy == 0) {
+			if(dx > 0)
+				return Collision(w-r, y0, -1, 0);
+			else
+				return Collision(r, y0, 1, 0);
+		}
+
+		double xsteps = (dx>0)? (double)(w-x0) / (double) dx
+				   			  : (double)x0 / (double) dx,
+
+			   ysteps = (dy>0)? (double)(h-y0) / (double) dy
+				   			  : (double)y0 / (double) dy;
+
+		if(fabs(xsteps) < fabs(ysteps))
+			return Collision(
+				left? r : w -r,
+				y0 + xsteps * dy,
+				-dx, dy
+			);
+		else
+			return Collision(
+				x0 + ysteps * dx,
+				top? r : h-r,
+				dx, -dy
+			);
+	}
+
 	protected:
 	void newFrame() {
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
@@ -74,6 +140,8 @@ class Playground {
 	}
 
 	private:
+
+	uint w, h;
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 
@@ -110,8 +178,19 @@ class Ball : public Toy {
 	}
 	
 	void on_dt(Playground &pg, uint dt) {
-		x0 += vx * dt;
-		y0 += vy * dt;
+		uint x1 = x0 + vx * dt;
+		uint y1 = y0 + vy * dt;
+
+		Collision c = pg.obstacle(x0, y0, x1, y1, r);
+		if(!c.really) {
+			x0 = x1;
+			y0 = y1;
+		} else {
+			x0 = c.x;
+			y0 = c.y;
+			vx = c.vx;
+			vy = c.vy;
+		}
 	}
 
 
