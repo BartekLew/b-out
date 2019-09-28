@@ -1,6 +1,7 @@
 #include <SDL.h>
 #include <vector>
 #include <cstdlib>
+#include <random>
 
 using namespace std;
 
@@ -10,12 +11,21 @@ void fatal() {
    	exit(EXIT_FAILURE);
 }
 
+int random (uint min, uint max) {
+	std::random_device dev;
+    std::mt19937 rng(dev());
+    std::uniform_int_distribution<std::mt19937::result_type> dist(min,max);
+
+	return dist(rng);
+}
+
 class Playground;
 
 class Toy {
 	public:
 	virtual void draw(SDL_Renderer *renderer) = 0;
 	virtual void on_dt(Playground &pg, uint dt) = 0;
+	virtual ~Toy() {}
 };
 
 class Collision {
@@ -63,6 +73,13 @@ class Playground {
 		return *this;
 	}
 
+	Playground& with(vector<Toy*> toys) {
+		for(Toy* t: toys)
+			with(*t);
+
+		return *this;
+	}
+
 	void play() {
 		bool done = false;
 		while(!done) {
@@ -81,7 +98,8 @@ class Playground {
 		}
 	}
 
-	Collision obstacle(uint x0, uint y0, uint x1, uint y1, uint r) { // This is simple case of straight obstacles as
+	Collision obstacle(uint x0, uint y0, uint x1, uint y1, uint r) {
+		// This is simple case of straight obstacles as
 		// scene boundaries…
 
 		bool left = (int)x1 - r <= 0,
@@ -213,8 +231,57 @@ class Ball : public Toy {
 	int  vx = 0, vy = 0; // velocity vector
 };
 
+class Box : public Toy {
+	public:
+	Box() {
+		r = random(0,255);
+		g = random(0,255);
+		b = random(0,255);
+	}
+
+	~Box(){}
+
+	Box &at(uint nx, uint ny) {
+		x = nx;
+		y = ny;
+
+		return *this;
+	}
+
+	void draw(SDL_Renderer *renderer) {
+		SDL_Rect rect;
+		rect.x = x;
+		rect.y = y;
+		rect.w = w;
+		rect.h = h;
+
+		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+		SDL_RenderFillRect(renderer, &rect);
+	}
+
+	void on_dt(Playground &pg, uint dt) {
+	}
+
+	private:
+	uint x = 0, y = 0, w = 50, h = 20;
+	uint r, g, b;
+};
+
 int main(int argc, char **argv) {
+	vector<Toy*> boxes;
+	for(uint x = 0; x < 8; x++)
+		for(uint y = 0; y < 8; y++){
+			Box *b = new Box();
+
+			boxes.push_back(&(b->at(200+50*x, 200+20*y)));
+		}
+
 	Playground(800,600)
-		.with(Ball().at(300,300).moving(1, -1))
+		.with(Ball().at(400,500).moving(-1, -2))
+		.with(boxes)
 		.play();
+
+	for(Toy* box : boxes)
+		delete box;
 }
+
