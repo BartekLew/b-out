@@ -25,11 +25,21 @@ struct Point {
     uint x, y;
 };
 
+struct Segment {
+    Segment(Point a, Point b): a(a), b(b) {}
+
+    Point a, b;
+};
+
 struct Mov {
     Mov(int dx, int dy): dx(dx), dy(dy) {}
 
     Point apply(Point p) {
         return Point(p.x + dx, p.y + dy);
+    }
+
+    Segment routeFrom(Point start) {
+        return Segment(start, apply(start));
     }
 
     int dx, dy;
@@ -110,53 +120,53 @@ class Playground {
 		}
 	}
 
-	Collision obstacle(Point start, Point end, uint r) {
+	Collision obstacle(Segment route, uint r) {
 		// This is simple case of straight obstacles as
 		// scene boundaries…
 
-		bool left = (int)end.x - r <= 0,
-			 top = (int)end.y - r <= 0,
-			 right = (int)end.x + r >= w,
-			 bottom = (int)end.y + r >= h;
+		bool left = (int)route.b.x - r <= 0,
+			 top = (int)route.b.y - r <= 0,
+			 right = (int)route.b.x + r >= w,
+			 bottom = (int)route.b.y + r >= h;
 
 		if(!top && !left && !right && !bottom)
 			return Collision();
 
-		int dx = end.x - start.x,
-			dy = end.y - start.y;
+		int dx = route.b.x - route.a.x,
+			dy = route.b.y - route.a.y;
 
 		if(dx == 0) {
 			if(dy > 0)
-				return Collision(Point(start.x, h-r), Mov(0, -1));
+				return Collision(Point(route.a.x, h-r), Mov(0, -1));
 			else
-				return Collision(Point(start.x, r), Mov(0, 1));
+				return Collision(Point(route.a.x, r), Mov(0, 1));
 		}
 
 		if(dy == 0) {
 			if(dx > 0)
-				return Collision(Point(w-r, start.y), Mov(-1, 0));
+				return Collision(Point(w-r, route.a.y), Mov(-1, 0));
 			else
-				return Collision(Point(r, start.y), Mov(1, 0));
+				return Collision(Point(r, route.a.y), Mov(1, 0));
 		}
 
-		double xsteps = (dx>0)? (double)(w-start.x) / (double) dx
-				   			  : (double)start.x / (double) dx,
+		double xsteps = (dx>0)? (double)(w-route.a.x) / (double) dx
+				   			  : (double)route.a.x / (double) dx,
 
-			   ysteps = (dy>0)? (double)(h-start.y) / (double) dy
-				   			  : (double)start.y / (double) dy;
+			   ysteps = (dy>0)? (double)(h-route.a.y) / (double) dy
+				   			  : (double)route.a.y / (double) dy;
 
 		if(fabs(xsteps) < fabs(ysteps))
 			return Collision(
 				Point(
                     left? r : w -r,
-                    start.y + xsteps * dy
+                    route.a.y + xsteps * dy
                 ),
 				Mov(-dx, dy)
 			);
 		else
 			return Collision(
 				Point(
-                    start.x + ysteps * dx,
+                    route.a.x + ysteps * dx,
 				    top? r : h-r
                 ),
 				Mov(dx, -dy)
@@ -214,7 +224,7 @@ class Ball : public Toy {
 	void time_passed(Playground &pg, uint dt) {
         Point dest = velocity.apply(pos);
 
-		Collision c = pg.obstacle(pos, dest, r);
+		Collision c = pg.obstacle(Segment(pos, dest), r);
 		if(!c.really) {
             pos = dest;
 		} else {
