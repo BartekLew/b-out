@@ -5,6 +5,34 @@
 
 using namespace std;
 
+class bad_optional : public exception {};
+
+// optional is part of C++17, but not in my compiler :)
+template<class T>
+class optional {
+    public:
+    optional(): present(false) {}
+    optional(T value): val(value), present(true){}
+
+    operator bool() {return present;}
+    T operator* () {
+        if(!present)
+            throw bad_optional();
+        return val;
+    }
+
+    T* operator-> () {
+        if(!present)
+            throw bad_optional();
+        return &val;
+    }
+
+    private:
+
+    T val;
+    bool present;
+};
+
 void fatal() {
 	fprintf (stderr, "b-out: %s\n", SDL_GetError());
 	SDL_Quit();
@@ -20,15 +48,10 @@ int random (uint min, uint max) {
 }
 
 struct Point {
+    Point(): x(0), y(0) {}
     Point(uint x, uint y): x(x), y(y) {}
 
     uint x, y;
-};
-
-struct Segment {
-    Segment(Point a, Point b): a(a), b(b) {}
-
-    Point a, b;
 };
 
 struct Mov {
@@ -38,11 +61,65 @@ struct Mov {
         return Point(p.x + dx, p.y + dy);
     }
 
-    Segment routeFrom(Point start) {
-        return Segment(start, apply(start));
+    int dx, dy;
+};
+
+struct Segment;
+
+struct Line {
+    Line(Point a, Point b) {
+        angle = (double)(b.y - a.y) / (b.x - a.x);
+
+        if(isinf(angle))
+            x = a.x; 
+        else
+            y0 = a.y - angle*a.x;
     }
 
-    int dx, dy;
+    optional<Point> intersection(Line b) {
+        if(angle == b.angle)
+            return optional<Point>();
+
+        if(isinf(angle)) 
+            return optional<Point>(Point(x, x*b.angle + b.y0));
+
+        if(isinf(b.angle))
+            return optional<Point>(Point(b.x, b.x*angle + y0));
+            
+
+        // y = a0 * x + b0
+        // y = a1 * x + b1
+        // thus
+        // a0 * x + b0 = a1 * x + b1
+        // a0 * x - a1 * x = b1 - b0
+        // (a0 - a1)*x = b1 - b0
+        // x = (b1 - b0) / (a0 - a1)
+        // having x, y is easy
+
+        double x = (b.y0 - y0) / (angle - b.angle);
+        return optional<Point>(Point(x, angle * x + y0));
+    }
+
+    double angle, y0, x;
+};
+
+struct Segment {
+    Segment(Point a, Point b): a(a), b(b) {}
+
+    optional<Point> intersection(Segment s) {
+        optional<Point> candidate = Line(a, b).intersection(Line(s.a, s.b));
+        if(candidate && candidate->x >= min(a.x, b.x)
+                    && candidate->x <= max(a.x,b.x))
+            return candidate;
+        else
+            return optional<Point>();
+    }
+
+    Mov diff() {
+        return Mov(b.x - a.x, b.y - b.x);
+    }
+
+    Point a, b;
 };
 
 class Playground;
