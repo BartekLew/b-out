@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstdlib>
 #include <random>
+#include <iostream>
 
 using namespace std;
 
@@ -51,6 +52,13 @@ struct Point {
     Point(): x(0), y(0) {}
     Point(uint x, uint y): x(x), y(y) {}
 
+    uint dist(Point b) {
+        int dx = b.x - x,
+            dy = b.y - y;
+
+        return floor(sqrt(dx*dx + dy*dy));
+    }
+
     uint x, y;
 };
 
@@ -68,7 +76,7 @@ struct Segment;
 
 struct Line {
     Line(Point a, Point b) {
-        angle = (double)(b.y - a.y) / (b.x - a.x);
+        angle = (double)((int)b.y - (int)a.y) / ((int)b.x - (int)a.x);
 
         if(isinf(angle))
             x = a.x; 
@@ -109,14 +117,16 @@ struct Segment {
     optional<Point> intersection(Segment s) {
         optional<Point> candidate = Line(a, b).intersection(Line(s.a, s.b));
         if(candidate && candidate->x >= min(a.x, b.x)
-                    && candidate->x <= max(a.x,b.x))
+                    && candidate->x <= max(a.x,b.x)
+                    && candidate->x >= min(s.a.x, s.b.x)
+                    && candidate->x <= max(s.a.x, s.b.x))
             return candidate;
         else
             return optional<Point>();
     }
 
-    Mov diff() {
-        return Mov(b.x - a.x, b.y - b.x);
+    Segment moved(Mov m) {
+        return Segment(m.apply(a), m.apply(b));
     }
 
     Point a, b;
@@ -131,16 +141,16 @@ class Toy {
 	virtual ~Toy() {}
 };
 
-class Collision {
+struct Collision {
 	public:
 	Collision(){}
 
 	Collision(Point where, Mov continuation)
 		: really(true), where(where), continuation(continuation) {}
 
-	const bool really = false;
-	const Point where = Point(0,0);
-	const Mov continuation = Mov(0,0);
+	bool really = false;
+	Point where = Point(0,0);
+	Mov continuation = Mov(0,0);
 };
 
 class Playground {
@@ -198,56 +208,41 @@ class Playground {
 	}
 
 	Collision obstacle(Segment route, uint r) {
-		// This is simple case of straight obstacles as
-		// scene boundaries…
+        vector<Segment> boundaries;
 
-		bool left = (int)route.b.x - r <= 0,
-			 top = (int)route.b.y - r <= 0,
-			 right = (int)route.b.x + r >= w,
-			 bottom = (int)route.b.y + r >= h;
+        Point a = Point(r, r),
+              b = Point(w-r, r),
+              c = Point(w-r, h-r),
+              d = Point(r, h-r);
 
-		if(!top && !left && !right && !bottom)
-			return Collision();
+        boundaries.push_back(Segment(a, b));
+        boundaries.push_back(Segment(b, c));
+        boundaries.push_back(Segment(c, d));
+        boundaries.push_back(Segment(d, a));
 
-		int dx = route.b.x - route.a.x,
-			dy = route.b.y - route.a.y;
+        optional<Point> intersection;
+        Segment *is;
 
-		if(dx == 0) {
-			if(dy > 0)
-				return Collision(Point(route.a.x, h-r), Mov(0, -1));
-			else
-				return Collision(Point(route.a.x, r), Mov(0, 1));
-		}
+        for(Segment &s : boundaries) {
+            optional<Point> i = s.intersection(route);
+            if(i && (!intersection
+                     || intersection->dist(route.a) > i->dist(route.a))) {
+                intersection = i;
+                is = &s;
+            }
+        }
 
-		if(dy == 0) {
-			if(dx > 0)
-				return Collision(Point(w-r, route.a.y), Mov(-1, 0));
-			else
-				return Collision(Point(r, route.a.y), Mov(1, 0));
-		}
+        if(intersection)
+            return Collision(
+                    *intersection,
+                    (is->a.x == is->b.x)?
+                        Mov(route.a.x - route.b.x,
+                            route.b.y - route.a.y)
+                        :Mov(route.b.x - route.a.x,
+                            route.a.y - route.b.y)
+            );
 
-		double xsteps = (dx>0)? (double)(w-route.a.x) / (double) dx
-				   			  : (double)route.a.x / (double) dx,
-
-			   ysteps = (dy>0)? (double)(h-route.a.y) / (double) dy
-				   			  : (double)route.a.y / (double) dy;
-
-		if(fabs(xsteps) < fabs(ysteps))
-			return Collision(
-				Point(
-                    left? r : w -r,
-                    route.a.y + xsteps * dy
-                ),
-				Mov(-dx, dy)
-			);
-		else
-			return Collision(
-				Point(
-                    route.a.x + ysteps * dx,
-				    top? r : h-r
-                ),
-				Mov(dx, -dy)
-			);
+        return Collision();
 	}
 
 	protected:
@@ -305,7 +300,7 @@ class Ball : public Toy {
 		if(!c.really) {
             pos = dest;
 		} else {
-            pos = c.where;
+            pos = c.continuation.apply(c.where);
             velocity = c.continuation;
 		}
 	}
