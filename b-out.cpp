@@ -19,12 +19,28 @@ int random (uint min, uint max) {
 	return dist(rng);
 }
 
+struct Point {
+    Point(uint x, uint y): x(x), y(y) {}
+
+    uint x, y;
+};
+
+struct Mov {
+    Mov(int dx, int dy): dx(dx), dy(dy) {}
+
+    Point apply(Point p) {
+        return Point(p.x + dx, p.y + dy);
+    }
+
+    int dx, dy;
+};
+
 class Playground;
 
 class Toy {
 	public:
 	virtual void draw(SDL_Renderer *renderer) = 0;
-	virtual void on_dt(Playground &pg, uint dt) = 0;
+	virtual void time_passed(Playground &pg, uint dt) = 0;
 	virtual ~Toy() {}
 };
 
@@ -32,16 +48,12 @@ class Collision {
 	public:
 	Collision(){}
 
-	Collision(uint x, uint y, int vx, int vy)
-		: really(true), x(x), y(y), vx(vx), vy(vy) {}
-
-	// really = true if colission happened
-	// x, y is the point of colission
-	// vx, vy is vector after bounce
+	Collision(Point where, Mov continuation)
+		: really(true), where(where), continuation(continuation) {}
 
 	const bool really = false;
-	const uint x = 0, y = 0;
-	const int vx = 0, vy = 0;
+	const Point where = Point(0,0);
+	const Mov continuation = Mov(0,0);
 };
 
 class Playground {
@@ -91,59 +103,63 @@ class Playground {
 
 			newFrame();
 			for(Toy *toy : toys) {
-				toy->on_dt(*this, 1);
+				toy->time_passed(*this, 1);
 				toy->draw(renderer);
 			}
 			show();
 		}
 	}
 
-	Collision obstacle(uint x0, uint y0, uint x1, uint y1, uint r) {
+	Collision obstacle(Point start, Point end, uint r) {
 		// This is simple case of straight obstacles as
 		// scene boundaries…
 
-		bool left = (int)x1 - r <= 0,
-			 top = (int)y1 - r <= 0,
-			 right = (int)x1 + r >= w,
-			 bottom = (int)y1 + r >= h;
+		bool left = (int)end.x - r <= 0,
+			 top = (int)end.y - r <= 0,
+			 right = (int)end.x + r >= w,
+			 bottom = (int)end.y + r >= h;
 
 		if(!top && !left && !right && !bottom)
 			return Collision();
 
-		int dx = x1 - x0,
-			dy = y1 - y0;
+		int dx = end.x - start.x,
+			dy = end.y - start.y;
 
 		if(dx == 0) {
 			if(dy > 0)
-				return Collision(x0, h-r, 0, -1);
+				return Collision(Point(start.x, h-r), Mov(0, -1));
 			else
-				return Collision(x0, r, 0, 1);
+				return Collision(Point(start.x, r), Mov(0, 1));
 		}
 
 		if(dy == 0) {
 			if(dx > 0)
-				return Collision(w-r, y0, -1, 0);
+				return Collision(Point(w-r, start.y), Mov(-1, 0));
 			else
-				return Collision(r, y0, 1, 0);
+				return Collision(Point(r, start.y), Mov(1, 0));
 		}
 
-		double xsteps = (dx>0)? (double)(w-x0) / (double) dx
-				   			  : (double)x0 / (double) dx,
+		double xsteps = (dx>0)? (double)(w-start.x) / (double) dx
+				   			  : (double)start.x / (double) dx,
 
-			   ysteps = (dy>0)? (double)(h-y0) / (double) dy
-				   			  : (double)y0 / (double) dy;
+			   ysteps = (dy>0)? (double)(h-start.y) / (double) dy
+				   			  : (double)start.y / (double) dy;
 
 		if(fabs(xsteps) < fabs(ysteps))
 			return Collision(
-				left? r : w -r,
-				y0 + xsteps * dy,
-				-dx, dy
+				Point(
+                    left? r : w -r,
+                    start.y + xsteps * dy
+                ),
+				Mov(-dx, dy)
 			);
 		else
 			return Collision(
-				x0 + ysteps * dx,
-				top? r : h-r,
-				dx, -dy
+				Point(
+                    start.x + ysteps * dx,
+				    top? r : h-r
+                ),
+				Mov(dx, -dy)
 			);
 	}
 
@@ -185,50 +201,45 @@ class Ball : public Toy {
 
 			uint dx = floor(sqrt(r*r - dy*dy));
 			SDL_RenderDrawLine(renderer,
-				x0 - dx, y0 - dy, x0 + dx, y0 - dy
+				pos.x - dx, pos.y - dy, pos.x + dx, pos.y - dy
 			);
 			SDL_RenderDrawLine(renderer,
-				x0 - dx, y0 + dy, x0 + dx, y0 + dy
+				pos.x - dx, pos.y + dy, pos.x + dx, pos.y + dy
 			);
 		}
 
-		SDL_RenderDrawLine(renderer, x0 - r, y0, x0 + r, y0);
+		SDL_RenderDrawLine(renderer, pos.x - r, pos.y, pos.x + r, pos.y);
 	}
 	
-	void on_dt(Playground &pg, uint dt) {
-		uint x1 = x0 + vx * dt;
-		uint y1 = y0 + vy * dt;
+	void time_passed(Playground &pg, uint dt) {
+        Point dest = velocity.apply(pos);
 
-		Collision c = pg.obstacle(x0, y0, x1, y1, r);
+		Collision c = pg.obstacle(pos, dest, r);
 		if(!c.really) {
-			x0 = x1;
-			y0 = y1;
+            pos = dest;
 		} else {
-			x0 = c.x;
-			y0 = c.y;
-			vx = c.vx;
-			vy = c.vy;
+            pos = c.where;
+            velocity = c.continuation;
 		}
 	}
 
 
-	Ball& at(uint x, uint y) {
-		x0 = x; y0 = y;
+	Ball& at(Point p) {
+		pos = p;
 
 		return *this;
 	}
 
-	Ball& moving(int x, int y) {
-		vx = x;
-		vy = y;
+	Ball& moving(Mov m) {
+        velocity = m;
 
 		return *this;
 	}
 
 	private:
-	uint red = 0xff, green = 0xff, blue=0, // color
-		 x0 = 400, y0 = 300, r = 10; // position & radious
-	int  vx = 0, vy = 0; // velocity vector
+	uint    red = 0xff, green = 0xff, blue=0, r=10;
+    Point   pos = Point(400,300);
+    Mov     velocity = Mov(0,0);
 };
 
 class Box : public Toy {
@@ -241,17 +252,16 @@ class Box : public Toy {
 
 	~Box(){}
 
-	Box &at(uint nx, uint ny) {
-		x = nx;
-		y = ny;
+	Box &at(Point p) {
+        pos = p;
 
 		return *this;
 	}
 
 	void draw(SDL_Renderer *renderer) {
 		SDL_Rect rect;
-		rect.x = x;
-		rect.y = y;
+		rect.x = pos.x;
+		rect.y = pos.y;
 		rect.w = w;
 		rect.h = h;
 
@@ -259,12 +269,13 @@ class Box : public Toy {
 		SDL_RenderFillRect(renderer, &rect);
 	}
 
-	void on_dt(Playground &pg, uint dt) {
+	void time_passed(Playground &pg, uint dt) {
 	}
 
 	private:
-	uint x = 0, y = 0, w = 50, h = 20;
-	uint r, g, b;
+    Point   pos = Point(0,0);
+	uint    w = 50, h = 20;
+	uint    r, g, b;
 };
 
 int main(int argc, char **argv) {
@@ -273,11 +284,11 @@ int main(int argc, char **argv) {
 		for(uint y = 0; y < 8; y++){
 			Box *b = new Box();
 
-			boxes.push_back(&(b->at(200+50*x, 200+20*y)));
+			boxes.push_back(&(b->at(Point(200+50*x, 200+20*y))));
 		}
 
 	Playground(800,600)
-		.with(Ball().at(400,500).moving(-1, -2))
+		.with(Ball().at(Point(400,500)).moving(Mov(-1, -2)))
 		.with(boxes)
 		.play();
 
