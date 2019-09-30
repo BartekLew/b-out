@@ -1,6 +1,7 @@
 #include <SDL.h>
 #include <vector>
 #include <list>
+#include <map>
 #include <cstdlib>
 #include <random>
 #include <iostream>
@@ -187,7 +188,7 @@ class Playground;
 class Toy {
 	public:
 	virtual void draw(SDL_Renderer *renderer) = 0;
-	virtual void time_passed(Playground &pg, uint dt) = 0;
+	virtual void timePassed(Playground &pg, uint dt) = 0;
 	virtual ~Toy() {}
     virtual void collision() {}
     virtual bool destroyed() {return false;}
@@ -210,6 +211,24 @@ struct Collision {
 	bool really = false;
 	Point where = Point(0,0);
 	Mov continuation = Mov(0,0);
+};
+
+class KeyListener {
+    public:
+    virtual void keyPress(int action) = 0;
+};
+
+struct KeyBinding {
+    KeyBinding(){}
+    KeyBinding(KeyListener *listener, int actionId)
+        : listener(listener), action(actionId) {}
+
+    void trigger() {
+        listener->keyPress(action);
+    }
+
+    KeyListener *listener;
+    int         action;
 };
 
 class Playground {
@@ -265,17 +284,31 @@ class Playground {
 			SDL_Event e;
 			while(SDL_PollEvent(&e) != 0) {
 				if(e.type == SDL_KEYDOWN) {
-                    if (e.key.keysym.sym == SDLK_q)
+                    auto b = keyBindings.find(e.key.keysym.sym);
+                    if (b != keyBindings.end())
+                        downKeys[b->first] = b->second;
+                    else if (e.key.keysym.sym == SDLK_q)
 					    done = true;
-                    if (e.key.keysym.sym == SDLK_ESCAPE)
+                    else if (e.key.keysym.sym == SDLK_ESCAPE)
                         pause = !pause;
                 }
+
+                if(e.type == SDL_KEYUP) {
+                    auto b = downKeys.find(e.key.keysym.sym);
+                    if (b != downKeys.end()) {
+                        downKeys.erase(b);
+                    }
+                }
 			}
+
+            for(auto i = downKeys.begin(); i != downKeys.end(); i++) {
+                i->second.trigger();
+            }
 
             if (!pause) {
     			newFrame();
     			for(Toy *toy : toys) {
-    				toy->time_passed(*this, 1);
+    				toy->timePassed(*this, 1);
     				toy->draw(renderer);
     			}
             }
@@ -328,6 +361,12 @@ class Playground {
         return Collision();
 	}
 
+    Playground& withKey(int keysym, KeyBinding binding) {
+        keyBindings[keysym] = binding;
+
+        return *this;
+    }
+
 	protected:
 	void newFrame() {
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
@@ -344,6 +383,8 @@ class Playground {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 
+    map<int,KeyBinding> downKeys;
+    map<int,KeyBinding> keyBindings;
     vector<Segment> boundaries;
 	list<Toy*> toys;
 };
@@ -377,7 +418,7 @@ class Ball : public Toy {
 		SDL_RenderDrawLine(renderer, pos.x - r, pos.y, pos.x + r, pos.y);
 	}
 	
-	void time_passed(Playground &pg, uint dt) {
+	void timePassed(Playground &pg, uint dt) {
         Point dest = velocity.apply(pos);
 
 		Collision c = pg.obstacle(Segment(pos, dest), r);
@@ -447,7 +488,7 @@ class Box : public Toy {
 
     bool destroyed() { return hits >= 2; }
     
-	void time_passed(Playground &pg, uint dt) {
+	void timePassed(Playground &pg, uint dt) {
 	}
 
 	private:
@@ -471,7 +512,7 @@ class Box : public Toy {
     uint    hits = 0;
 };
 
-class Bat : public Toy {
+class Bat : public Toy, public KeyListener {
     public:
     Bat() {
         refresh();
@@ -479,7 +520,7 @@ class Bat : public Toy {
 
     ~Bat() {}
 
-    void time_passed(Playground &pg, uint dt) {}
+    void timePassed(Playground &pg, uint dt) {}
     void draw(SDL_Renderer *renderer) {
 		SDL_Rect rect;
 		rect.x = pos.x;
@@ -511,6 +552,22 @@ class Bat : public Toy {
         bounds.push_back(Segment(d, a));
     }
 
+    void keyPress(int action) {
+        switch(action) {
+            case moveLeft:
+                pos.x -= 2;
+                break;
+            case moveRight:
+                pos.x += 2;
+        }
+
+        refresh();
+    }
+
+    enum Actions {
+        moveLeft, moveRight
+    };
+
     private:
     Point   pos = Point(350,750);
     uint    w = 100, h=10;
@@ -526,10 +583,13 @@ int main(int argc, char **argv) {
 			boxes.push_back(&(b->at(Point(200+50*x, 200+20*y))));
 		}
 
+    Bat bat;
 	Playground(800,600)
-        .with(Bat().at(Point(350,550)))
+        .with(bat.at(Point(350,550)))
 		.with(Ball().at(Point(400,500)).moving(Mov(-1, -2)))
 		.with(boxes)
+        .withKey(SDLK_LEFT, KeyBinding(&bat, (int)Bat::moveLeft))
+        .withKey(SDLK_RIGHT, KeyBinding(&bat, (int)Bat::moveRight))
 		.play();
 
 	for(Toy* box : boxes)
