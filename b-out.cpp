@@ -280,6 +280,7 @@ class Playground {
 	void play() {
 		bool done = false;
         bool pause = false;
+        uint last_time = SDL_GetTicks();
 		while(!done) {
 			SDL_Event e;
 			while(SDL_PollEvent(&e) != 0) {
@@ -313,6 +314,9 @@ class Playground {
     			}
             }
 			show();
+
+            while(SDL_GetTicks() < last_time + 12); // aim at 60fps
+            last_time = SDL_GetTicks();
 		}
 	}
 
@@ -555,10 +559,10 @@ class Bat : public Toy, public KeyListener {
     void keyPress(int action) {
         switch(action) {
             case moveLeft:
-                pos.x -= 2;
+                pos.x -= 7;
                 break;
             case moveRight:
-                pos.x += 2;
+                pos.x += 7;
         }
 
         refresh();
@@ -586,7 +590,7 @@ int main(int argc, char **argv) {
     Bat bat;
 	Playground(800,600)
         .with(bat.at(Point(350,550)))
-		.with(Ball().at(Point(400,500)).moving(Mov(-1, -1)))
+		.with(Ball().at(Point(400,500)).moving(Mov(-2, -3)))
 		.with(boxes)
         .withKey(SDLK_LEFT, KeyBinding(&bat, (int)Bat::moveLeft))
         .withKey(SDLK_RIGHT, KeyBinding(&bat, (int)Bat::moveRight))
