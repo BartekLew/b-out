@@ -189,6 +189,8 @@ class Toy {
 	virtual void draw(SDL_Renderer *renderer) = 0;
 	virtual void time_passed(Playground &pg, uint dt) = 0;
 	virtual ~Toy() {}
+    virtual void collision() {}
+    virtual bool destroyed() {return false;}
 
     vector<Segment> &boundaries() {
         return bounds;
@@ -301,7 +303,9 @@ class Playground {
         }
 
         if (toy) {
-            toys.remove(toy);
+            toy->collision();
+            if(toy->destroyed())
+                toys.remove(toy);
         }
 
         if(intersection)
@@ -427,6 +431,15 @@ class Box : public Toy {
 		SDL_RenderFillRect(renderer, &rect);
 	}
 
+    void collision() {
+        hits++;
+		r = random(10,255);
+		g = random(10,255);
+		b = random(10,255);
+    }
+
+    bool destroyed() { return hits >= 2; }
+    
 	void time_passed(Playground &pg, uint dt) {
 	}
 
@@ -448,6 +461,53 @@ class Box : public Toy {
     Point   pos = Point(0,0);
 	uint    w = 50, h = 20;
 	uint    r, g, b;
+    uint    hits = 0;
+};
+
+class Bat : public Toy {
+    public:
+    Bat() {
+        refresh();
+    }
+
+    ~Bat() {}
+
+    void time_passed(Playground &pg, uint dt) {}
+    void draw(SDL_Renderer *renderer) {
+		SDL_Rect rect;
+		rect.x = pos.x;
+		rect.y = pos.y;
+		rect.w = w;
+		rect.h = h;
+
+		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+		SDL_RenderFillRect(renderer, &rect);
+    }
+
+    Bat &at(Point p) {
+        pos = p;
+        refresh();
+
+		return *this;
+	}
+
+    void refresh() {
+        bounds.clear();
+        Point a(pos.x,      pos.y),
+              b(pos.x + w,  pos.y),
+              c(pos.x + w,  pos.y + h),
+              d(pos.x,      pos.y + h);
+
+        bounds.push_back(Segment(a, b));
+        bounds.push_back(Segment(b, c));
+        bounds.push_back(Segment(c, d));
+        bounds.push_back(Segment(d, a));
+    }
+
+    private:
+    Point   pos = Point(350,750);
+    uint    w = 100, h=10;
+    uint    r = 150, g = 150, b = 150;
 };
 
 int main(int argc, char **argv) {
@@ -460,6 +520,7 @@ int main(int argc, char **argv) {
 		}
 
 	Playground(800,600)
+        .with(Bat().at(Point(350,550)))
 		.with(Ball().at(Point(400,500)).moving(Mov(-1, -2)))
 		.with(boxes)
 		.play();
