@@ -578,11 +578,11 @@ class Bat : public Toy, public KeyListener {
     uint    r = 150, g = 150, b = 150;
 };
 
-Mov initialBallMovement() {
+Mov initialBallMovement(int direction) {
     int dx = random(1, 5);
     if(random(0,1) == 0) dx = -dx;
 
-    int dy = -(6 - abs(dx));
+    int dy = direction * (6 - abs(dx));
     return Mov(dx, dy);
 }
 
@@ -595,13 +595,17 @@ int main(int argc, char **argv) {
 			boxes.push_back(&(b->at(Point(200+50*x, 200+20*y))));
 		}
 
-    Bat bat;
+    Bat bat1, bat2;
 	Playground(800,600)
-        .with(bat.at(Point(350,550)))
-		.with(Ball().at(Point(400,500)).moving(initialBallMovement()))
+		.with(Ball().at(Point(400,100)).moving(initialBallMovement(1)))
+		.with(Ball().at(Point(400,500)).moving(initialBallMovement(-1)))
 		.with(boxes)
-        .withKey(SDLK_LEFT, KeyBinding(&bat, (int)Bat::moveLeft))
-        .withKey(SDLK_RIGHT, KeyBinding(&bat, (int)Bat::moveRight))
+        .with(bat1.at(Point(350,550)))
+        .withKey(SDLK_LEFT, KeyBinding(&bat1, (int)Bat::moveLeft))
+        .withKey(SDLK_RIGHT, KeyBinding(&bat1, (int)Bat::moveRight))
+        .with(bat2.at(Point(350,50)))
+        .withKey(SDLK_a, KeyBinding(&bat2, (int)Bat::moveLeft))
+        .withKey(SDLK_d, KeyBinding(&bat2, (int)Bat::moveRight))
 		.play();
 
 	for(Toy* box : boxes)
