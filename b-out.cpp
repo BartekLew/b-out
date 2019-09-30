@@ -142,7 +142,12 @@ struct Segment {
         if(candidate && candidate->x >= min(a.x, b.x)
                     && candidate->x <= max(a.x,b.x)
                     && candidate->x >= min(s.a.x, s.b.x)
-                    && candidate->x <= max(s.a.x, s.b.x))
+                    && candidate->x <= max(s.a.x, s.b.x)
+                    && candidate->y >= min(a.y, b.y)
+                    && candidate->y <= max(a.y, b.y)
+                    && candidate->y >= min(s.a.y, s.b.y)
+                    && candidate->y <= max(s.a.y, s.b.y))
+
             return candidate;
         else
             return optional<Point>();
@@ -150,7 +155,19 @@ struct Segment {
 
     optional<Point> closePoint(Segment s, uint distance) {
         Line base(a,b);
-        if(base.dist(s.b) <= distance)
+        Point p1 = *(base.intersection(base.perpendicular(s.b)));
+
+        double d;
+        if(a.x == b.x && p1.y >= min(a.y, b.y)
+                      && p1.y <= max(a.y, b.y))
+            d = p1.dist(s.b);
+        else if(a.y == b.y && p1.x >= min(a.x, b.x)
+                      && p1.x <= max(a.x, b.x))
+            d = p1.dist(s.b);
+        else
+            d = min(a.dist(s.b), b.dist(s.b));
+
+        if(d <= distance)
             return Point((s.a.x+s.b.x)/2,
                         (s.a.y+s.b.y)/2);
 
@@ -171,6 +188,13 @@ class Toy {
 	virtual void draw(SDL_Renderer *renderer) = 0;
 	virtual void time_passed(Playground &pg, uint dt) = 0;
 	virtual ~Toy() {}
+
+    vector<Segment> &boundaries() {
+        return bounds;
+    }
+
+    protected:
+    vector<Segment> bounds;
 };
 
 struct Collision {
@@ -259,6 +283,17 @@ class Playground {
                      || intersection->dist(route.a) > i->dist(route.a))) {
                 intersection = i;
                 is = &s;
+            }
+        }
+
+        for(Toy *t : toys) {
+            for(Segment &s : t->boundaries()) {
+                optional<Point> i = s.closePoint(route, r);
+                if(i && (!intersection
+                            || intersection->dist(route.a) > i->dist(route.a))) {
+                    intersection = i;
+                    is = &s;
+                }
             }
         }
 
@@ -361,12 +396,15 @@ class Box : public Toy {
 		r = random(0,255);
 		g = random(0,255);
 		b = random(0,255);
+
+        refresh();
 	}
 
 	~Box(){}
 
 	Box &at(Point p) {
         pos = p;
+        refresh();
 
 		return *this;
 	}
@@ -386,6 +424,20 @@ class Box : public Toy {
 	}
 
 	private:
+    
+    void refresh() {
+        bounds.clear();
+        Point a(pos.x,      pos.y),
+              b(pos.x + w,  pos.y),
+              c(pos.x + w,  pos.y + h),
+              d(pos.x,      pos.y + h);
+
+        bounds.push_back(Segment(a, b));
+        bounds.push_back(Segment(b, c));
+        bounds.push_back(Segment(c, d));
+        bounds.push_back(Segment(d, a));
+    }
+
     Point   pos = Point(0,0);
 	uint    w = 50, h = 20;
 	uint    r, g, b;
