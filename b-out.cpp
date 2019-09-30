@@ -586,7 +586,7 @@ int main(int argc, char **argv) {
     Bat bat;
 	Playground(800,600)
         .with(bat.at(Point(350,550)))
-		.with(Ball().at(Point(400,500)).moving(Mov(-1, -2)))
+		.with(Ball().at(Point(400,500)).moving(Mov(-1, -1)))
 		.with(boxes)
         .withKey(SDLK_LEFT, KeyBinding(&bat, (int)Bat::moveLeft))
         .withKey(SDLK_RIGHT, KeyBinding(&bat, (int)Bat::moveRight))
