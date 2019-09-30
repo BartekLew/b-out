@@ -260,18 +260,25 @@ class Playground {
 
 	void play() {
 		bool done = false;
+        bool pause = false;
 		while(!done) {
 			SDL_Event e;
 			while(SDL_PollEvent(&e) != 0) {
-				if(e.type == SDL_KEYDOWN)
-					done = true;
+				if(e.type == SDL_KEYDOWN) {
+                    if (e.key.keysym.sym == SDLK_q)
+					    done = true;
+                    if (e.key.keysym.sym == SDLK_ESCAPE)
+                        pause = !pause;
+                }
 			}
 
-			newFrame();
-			for(Toy *toy : toys) {
-				toy->time_passed(*this, 1);
-				toy->draw(renderer);
-			}
+            if (!pause) {
+    			newFrame();
+    			for(Toy *toy : toys) {
+    				toy->time_passed(*this, 1);
+    				toy->draw(renderer);
+    			}
+            }
 			show();
 		}
 	}
