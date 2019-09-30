@@ -578,6 +578,14 @@ class Bat : public Toy, public KeyListener {
     uint    r = 150, g = 150, b = 150;
 };
 
+Mov initialBallMovement() {
+    int dx = random(1, 5);
+    if(random(0,1) == 0) dx = -dx;
+
+    int dy = -(6 - abs(dx));
+    return Mov(dx, dy);
+}
+
 int main(int argc, char **argv) {
 	vector<Toy*> boxes;
 	for(uint x = 0; x < 8; x++)
@@ -590,7 +598,7 @@ int main(int argc, char **argv) {
     Bat bat;
 	Playground(800,600)
         .with(bat.at(Point(350,550)))
-		.with(Ball().at(Point(400,500)).moving(Mov(-2, -3)))
+		.with(Ball().at(Point(400,500)).moving(initialBallMovement()))
 		.with(boxes)
         .withKey(SDLK_LEFT, KeyBinding(&bat, (int)Bat::moveLeft))
         .withKey(SDLK_RIGHT, KeyBinding(&bat, (int)Bat::moveRight))
