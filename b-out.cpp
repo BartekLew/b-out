@@ -1,5 +1,6 @@
 #include <SDL.h>
 #include <vector>
+#include <list>
 #include <cstdlib>
 #include <random>
 #include <iostream>
@@ -275,7 +276,8 @@ class Playground {
 
 	Collision obstacle(Segment route, uint r) {
         optional<Point> intersection;
-        Segment *is;
+        Segment *is = NULL;
+        Toy *toy = NULL;
 
         for(Segment &s : boundaries) {
             optional<Point> i = s.closePoint(route, r);
@@ -293,8 +295,13 @@ class Playground {
                             || intersection->dist(route.a) > i->dist(route.a))) {
                     intersection = i;
                     is = &s;
+                    toy = t;
                 }
             }
+        }
+
+        if (toy) {
+            toys.remove(toy);
         }
 
         if(intersection)
@@ -327,7 +334,7 @@ class Playground {
 	SDL_Renderer *renderer;
 
     vector<Segment> boundaries;
-	vector<Toy*> toys;
+	list<Toy*> toys;
 };
 
 class Ball : public Toy {
