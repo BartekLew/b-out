@@ -400,9 +400,9 @@ class Ball : public Toy {
 class Box : public Toy {
 	public:
 	Box() {
-		r = random(0,255);
-		g = random(0,255);
-		b = random(0,255);
+		r = random(10,255);
+		g = random(10,255);
+		b = random(10,255);
 
         refresh();
 	}
