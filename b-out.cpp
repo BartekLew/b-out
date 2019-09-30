@@ -74,7 +74,8 @@ struct Mov {
 
 struct Segment;
 
-struct Line {
+class Line {
+    public:
     Line(Point a, Point b) {
         angle = (double)((int)b.y - (int)a.y) / ((int)b.x - (int)a.x);
 
@@ -108,6 +109,28 @@ struct Line {
         return optional<Point>(Point(x, angle * x + y0));
     }
 
+    Line perpendicular(Point p) {
+        double a = -(1/angle);
+        if(isinf(a))
+            return Line(a, p.x);
+        else
+            return Line(a, p.y - a * p.x);
+    }
+
+    uint dist(Point p) {
+        Point p2 = *(intersection(perpendicular(p)));
+        return p.dist(p2);
+    }
+
+    private:
+    Line(double a, double b) {
+        angle = a;
+        if(isinf(angle))
+            x = b;
+        else
+            y0 = b;
+    }
+
     double angle, y0, x;
 };
 
@@ -124,6 +147,15 @@ struct Segment {
         else
             return optional<Point>();
     }
+
+    optional<Point> closePoint(Segment s, uint distance) {
+        Line base(a,b);
+        if(base.dist(s.b) <= distance)
+            return Point((s.a.x+s.b.x)/2,
+                        (s.a.y+s.b.y)/2);
+
+        return optional<Point>();
+    } 
 
     Segment moved(Mov m) {
         return Segment(m.apply(a), m.apply(b));
@@ -166,6 +198,16 @@ class Playground {
 
 		newFrame();
 		show();
+
+        Point a = Point(0, 0),
+              b = Point(w, 0),
+              c = Point(w, h),
+              d = Point(0, h);
+
+        boundaries.push_back(Segment(a, b));
+        boundaries.push_back(Segment(b, c));
+        boundaries.push_back(Segment(c, d));
+        boundaries.push_back(Segment(d, a));
     }
 
 	~Playground() {
@@ -208,23 +250,11 @@ class Playground {
 	}
 
 	Collision obstacle(Segment route, uint r) {
-        vector<Segment> boundaries;
-
-        Point a = Point(r, r),
-              b = Point(w-r, r),
-              c = Point(w-r, h-r),
-              d = Point(r, h-r);
-
-        boundaries.push_back(Segment(a, b));
-        boundaries.push_back(Segment(b, c));
-        boundaries.push_back(Segment(c, d));
-        boundaries.push_back(Segment(d, a));
-
         optional<Point> intersection;
         Segment *is;
 
         for(Segment &s : boundaries) {
-            optional<Point> i = s.intersection(route);
+            optional<Point> i = s.closePoint(route, r);
             if(i && (!intersection
                      || intersection->dist(route.a) > i->dist(route.a))) {
                 intersection = i;
@@ -261,6 +291,7 @@ class Playground {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 
+    vector<Segment> boundaries;
 	vector<Toy*> toys;
 };
 
