@@ -37,17 +37,17 @@ class optional {
 };
 
 void fatal() {
-	fprintf (stderr, "b-out: %s\n", SDL_GetError());
-	SDL_Quit();
-   	exit(EXIT_FAILURE);
+    fprintf (stderr, "b-out: %s\n", SDL_GetError());
+    SDL_Quit();
+    exit(EXIT_FAILURE);
 }
 
 int random (uint min, uint max) {
-	std::random_device dev;
+    std::random_device dev;
     std::mt19937 rng(dev());
     std::uniform_int_distribution<std::mt19937::result_type> dist(min,max);
 
-	return dist(rng);
+    return dist(rng);
 }
 
 struct Point {
@@ -186,10 +186,10 @@ struct Segment {
 class Playground;
 
 class Toy {
-	public:
-	virtual void draw(SDL_Renderer *renderer) = 0;
-	virtual void timePassed(Playground &pg, uint dt) = 0;
-	virtual ~Toy() {}
+    public:
+    virtual void draw(SDL_Renderer *renderer) = 0;
+    virtual void timePassed(Playground &pg, uint dt) = 0;
+    virtual ~Toy() {}
     virtual void collision() {}
     virtual bool destroyed() {return false;}
 
@@ -202,15 +202,15 @@ class Toy {
 };
 
 struct Collision {
-	public:
-	Collision(){}
+    public:
+    Collision(){}
 
-	Collision(Point where, Mov continuation)
-		: really(true), where(where), continuation(continuation) {}
+    Collision(Point where, Mov continuation)
+        : really(true), where(where), continuation(continuation) {}
 
-	bool really = false;
-	Point where = Point(0,0);
-	Mov continuation = Mov(0,0);
+    bool really = false;
+    Point where = Point(0,0);
+    Mov continuation = Mov(0,0);
 };
 
 class KeyListener {
@@ -234,16 +234,16 @@ struct KeyBinding {
 class Playground {
     public:
     Playground(uint width, uint height)
-			:w(width), h(height) {
+            :w(width), h(height) {
 
         if(SDL_Init(SDL_INIT_VIDEO) < 0) fatal();
-	    
-		if(SDL_CreateWindowAndRenderer(
-			width, height, 0, &window, &renderer
-		) != 0) fatal();
+        
+        if(SDL_CreateWindowAndRenderer(
+            width, height, 0, &window, &renderer
+        ) != 0) fatal();
 
-		newFrame();
-		show();
+        newFrame();
+        show();
 
         Point a = Point(0, 0),
               b = Point(w, 0),
@@ -256,40 +256,40 @@ class Playground {
         boundaries.push_back(Segment(d, a));
     }
 
-	~Playground() {
-		SDL_DestroyRenderer(renderer);
-		SDL_DestroyWindow(window);
-		SDL_Quit();
-	}
+    ~Playground() {
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+    }
 
-	Playground& with(Toy &d) {
-		toys.push_back(&d);
-		d.draw(renderer);
-		SDL_RenderPresent(renderer);
+    Playground& with(Toy &d) {
+        toys.push_back(&d);
+        d.draw(renderer);
+        SDL_RenderPresent(renderer);
 
-		return *this;
-	}
+        return *this;
+    }
 
-	Playground& with(vector<Toy*> toys) {
-		for(Toy* t: toys)
-			with(*t);
+    Playground& with(vector<Toy*> toys) {
+        for(Toy* t: toys)
+            with(*t);
 
-		return *this;
-	}
+        return *this;
+    }
 
-	void play() {
-		bool done = false;
+    void play() {
+        bool done = false;
         bool pause = false;
         uint last_time = SDL_GetTicks();
-		while(!done) {
-			SDL_Event e;
-			while(SDL_PollEvent(&e) != 0) {
-				if(e.type == SDL_KEYDOWN) {
+        while(!done) {
+            SDL_Event e;
+            while(SDL_PollEvent(&e) != 0) {
+                if(e.type == SDL_KEYDOWN) {
                     auto b = keyBindings.find(e.key.keysym.sym);
                     if (b != keyBindings.end())
                         downKeys[b->first] = b->second;
                     else if (e.key.keysym.sym == SDLK_q)
-					    done = true;
+                        done = true;
                     else if (e.key.keysym.sym == SDLK_ESCAPE)
                         pause = !pause;
                 }
@@ -300,27 +300,27 @@ class Playground {
                         downKeys.erase(b);
                     }
                 }
-			}
+            }
 
             for(auto i = downKeys.begin(); i != downKeys.end(); i++) {
                 i->second.trigger();
             }
 
             if (!pause) {
-    			newFrame();
-    			for(Toy *toy : toys) {
-    				toy->timePassed(*this, 1);
-    				toy->draw(renderer);
-    			}
+                newFrame();
+                for(Toy *toy : toys) {
+                    toy->timePassed(*this, 1);
+                    toy->draw(renderer);
+                }
             }
-			show();
+            show();
 
             while(SDL_GetTicks() < last_time + 12); // aim at 60fps
             last_time = SDL_GetTicks();
-		}
-	}
+        }
+    }
 
-	Collision obstacle(Segment route, uint r) {
+    Collision obstacle(Segment route, uint r) {
         optional<Point> intersection;
         Segment *is = NULL;
         Toy *toy = NULL;
@@ -363,7 +363,7 @@ class Playground {
             );
 
         return Collision();
-	}
+    }
 
     Playground& withKey(int keysym, KeyBinding binding) {
         keyBindings[keysym] = binding;
@@ -371,131 +371,131 @@ class Playground {
         return *this;
     }
 
-	protected:
-	void newFrame() {
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-		SDL_RenderClear(renderer);
-	}
+    protected:
+    void newFrame() {
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+        SDL_RenderClear(renderer);
+    }
 
-	void show() {
-		SDL_RenderPresent(renderer);
-	}
+    void show() {
+        SDL_RenderPresent(renderer);
+    }
 
-	private:
+    private:
 
-	uint w, h;
-	SDL_Window *window;
-	SDL_Renderer *renderer;
+    uint w, h;
+    SDL_Window *window;
+    SDL_Renderer *renderer;
 
     map<int,KeyBinding> downKeys;
     map<int,KeyBinding> keyBindings;
     vector<Segment> boundaries;
-	list<Toy*> toys;
+    list<Toy*> toys;
 };
 
 class Ball : public Toy {
-	public:
+    public:
 
-	void draw(SDL_Renderer *renderer) {
-		SDL_SetRenderDrawColor(renderer, red, green, blue, 255);	
+    void draw(SDL_Renderer *renderer) {
+        SDL_SetRenderDrawColor(renderer, red, green, blue, 255);    
 
-		for(uint dy = 1; dy < r; dy++) {
-			/* Draw circle line by line.
-			 *
-			 * Formula (for point 0,0) is: r^2 = x^2 + y^2
-			 *
-			 * now we have y and r known, so:
-			 * x = +/- sqrt(r^2 - y^2)
-			 *
-			 * Of course we have to apply offset (x,y),
-			 * so I operate on dx and dy rather than x & y.*/
+        for(uint dy = 1; dy < r; dy++) {
+            /* Draw circle line by line.
+             *
+             * Formula (for point 0,0) is: r^2 = x^2 + y^2
+             *
+             * now we have y and r known, so:
+             * x = +/- sqrt(r^2 - y^2)
+             *
+             * Of course we have to apply offset (x,y),
+             * so I operate on dx and dy rather than x & y.*/
 
-			uint dx = floor(sqrt(r*r - dy*dy));
-			SDL_RenderDrawLine(renderer,
-				pos.x - dx, pos.y - dy, pos.x + dx, pos.y - dy
-			);
-			SDL_RenderDrawLine(renderer,
-				pos.x - dx, pos.y + dy, pos.x + dx, pos.y + dy
-			);
-		}
+            uint dx = floor(sqrt(r*r - dy*dy));
+            SDL_RenderDrawLine(renderer,
+                pos.x - dx, pos.y - dy, pos.x + dx, pos.y - dy
+            );
+            SDL_RenderDrawLine(renderer,
+                pos.x - dx, pos.y + dy, pos.x + dx, pos.y + dy
+            );
+        }
 
-		SDL_RenderDrawLine(renderer, pos.x - r, pos.y, pos.x + r, pos.y);
-	}
-	
-	void timePassed(Playground &pg, uint dt) {
+        SDL_RenderDrawLine(renderer, pos.x - r, pos.y, pos.x + r, pos.y);
+    }
+    
+    void timePassed(Playground &pg, uint dt) {
         Point dest = velocity.apply(pos);
 
-		Collision c = pg.obstacle(Segment(pos, dest), r);
-		if(!c.really) {
+        Collision c = pg.obstacle(Segment(pos, dest), r);
+        if(!c.really) {
             pos = dest;
-		} else {
+        } else {
             pos = c.continuation.apply(c.where);
             velocity = c.continuation;
-		}
-	}
+        }
+    }
 
 
-	Ball& at(Point p) {
-		pos = p;
+    Ball& at(Point p) {
+        pos = p;
 
-		return *this;
-	}
+        return *this;
+    }
 
-	Ball& moving(Mov m) {
+    Ball& moving(Mov m) {
         velocity = m;
 
-		return *this;
-	}
+        return *this;
+    }
 
-	private:
-	uint    red = 0xff, green = 0xff, blue=0, r=10;
+    private:
+    uint    red = 0xff, green = 0xff, blue=0, r=10;
     Point   pos = Point(400,300);
     Mov     velocity = Mov(0,0);
 };
 
 class Box : public Toy {
-	public:
-	Box() {
-		r = random(10,255);
-		g = random(10,255);
-		b = random(10,255);
+    public:
+    Box() {
+        r = random(10,255);
+        g = random(10,255);
+        b = random(10,255);
 
         refresh();
-	}
+    }
 
-	~Box(){}
+    ~Box(){}
 
-	Box &at(Point p) {
+    Box &at(Point p) {
         pos = p;
         refresh();
 
-		return *this;
-	}
+        return *this;
+    }
 
-	void draw(SDL_Renderer *renderer) {
-		SDL_Rect rect;
-		rect.x = pos.x;
-		rect.y = pos.y;
-		rect.w = w;
-		rect.h = h;
+    void draw(SDL_Renderer *renderer) {
+        SDL_Rect rect;
+        rect.x = pos.x;
+        rect.y = pos.y;
+        rect.w = w;
+        rect.h = h;
 
-		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-		SDL_RenderFillRect(renderer, &rect);
-	}
+        SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+        SDL_RenderFillRect(renderer, &rect);
+    }
 
     void collision() {
         hits++;
-		r = random(10,255);
-		g = random(10,255);
-		b = random(10,255);
+        r = random(10,255);
+        g = random(10,255);
+        b = random(10,255);
     }
 
     bool destroyed() { return hits >= 2; }
     
-	void timePassed(Playground &pg, uint dt) {
-	}
+    void timePassed(Playground &pg, uint dt) {
+    }
 
-	private:
+    private:
     
     void refresh() {
         bounds.clear();
@@ -511,8 +511,8 @@ class Box : public Toy {
     }
 
     Point   pos = Point(0,0);
-	uint    w = 50, h = 20;
-	uint    r, g, b;
+    uint    w = 50, h = 20;
+    uint    r, g, b;
     uint    hits = 0;
 };
 
@@ -526,22 +526,22 @@ class Bat : public Toy, public KeyListener {
 
     void timePassed(Playground &pg, uint dt) {}
     void draw(SDL_Renderer *renderer) {
-		SDL_Rect rect;
-		rect.x = pos.x;
-		rect.y = pos.y;
-		rect.w = w;
-		rect.h = h;
+        SDL_Rect rect;
+        rect.x = pos.x;
+        rect.y = pos.y;
+        rect.w = w;
+        rect.h = h;
 
-		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-		SDL_RenderFillRect(renderer, &rect);
+        SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+        SDL_RenderFillRect(renderer, &rect);
     }
 
     Bat &at(Point p) {
         pos = p;
         refresh();
 
-		return *this;
-	}
+        return *this;
+    }
 
     void refresh() {
         bounds.clear();
@@ -587,28 +587,28 @@ Mov initialBallMovement(int direction) {
 }
 
 int main(int argc, char **argv) {
-	vector<Toy*> boxes;
-	for(uint x = 0; x < 8; x++)
-		for(uint y = 0; y < 8; y++){
-			Box *b = new Box();
+    vector<Toy*> boxes;
+    for(uint x = 0; x < 8; x++)
+        for(uint y = 0; y < 8; y++){
+            Box *b = new Box();
 
-			boxes.push_back(&(b->at(Point(200+50*x, 200+20*y))));
-		}
+            boxes.push_back(&(b->at(Point(200+50*x, 200+20*y))));
+        }
 
     Bat bat1, bat2;
-	Playground(800,600)
-		.with(Ball().at(Point(400,100)).moving(initialBallMovement(1)))
-		.with(Ball().at(Point(400,500)).moving(initialBallMovement(-1)))
-		.with(boxes)
+    Playground(800,600)
+        .with(Ball().at(Point(400,100)).moving(initialBallMovement(1)))
+        .with(Ball().at(Point(400,500)).moving(initialBallMovement(-1)))
+        .with(boxes)
         .with(bat1.at(Point(350,550)))
         .withKey(SDLK_LEFT, KeyBinding(&bat1, (int)Bat::moveLeft))
         .withKey(SDLK_RIGHT, KeyBinding(&bat1, (int)Bat::moveRight))
         .with(bat2.at(Point(350,50)))
         .withKey(SDLK_a, KeyBinding(&bat2, (int)Bat::moveLeft))
         .withKey(SDLK_d, KeyBinding(&bat2, (int)Bat::moveRight))
-		.play();
+        .play();
 
-	for(Toy* box : boxes)
-		delete box;
+    for(Toy* box : boxes)
+        delete box;
 }
 
