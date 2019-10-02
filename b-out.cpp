@@ -50,9 +50,26 @@ int random (uint min, uint max) {
     return dist(rng);
 }
 
+void write16(void *buff, uint n) {
+    if(n & 0xffff0000)
+        cerr << "write16: value exeeds 16bits" << endl;
+
+    ((char *) buff)[0] = (char)(n & 0xff);
+    ((char *) buff)[1] = (char)((n >> 8) & 0xff);
+}
+
+uint read16(const void *buff) {
+    return ((uint)((char*) buff)[0])
+        + (((uint)((char*) buff)[1]) << 8);
+}
+
 struct Point {
     Point(): x(0), y(0) {}
     Point(uint x, uint y): x(x), y(y) {}
+    Point(string bin) {
+        x = read16(bin.data());
+        y = read16(bin.data()+2);
+    };
 
     uint dist(Point b) {
         int dx = b.x - x,
@@ -61,6 +78,14 @@ struct Point {
         return floor(sqrt(dx*dx + dy*dy));
     }
 
+    string bin() {
+        char    data[4];
+        write16(data, x);
+        write16(data+2, y);
+
+        return string(data, 4);
+    }
+        
     uint x, y;
 };
 
@@ -231,6 +256,14 @@ struct KeyBinding {
     int         action;
 };
 
+class Player {
+    public:
+    virtual ~Player() {};
+    virtual void initPlayer(Playground &pg) = 0;
+    virtual void timePassed(list<Point> state) = 0;
+    virtual Point getPos() = 0;
+};
+
 class Playground {
     public:
     Playground(uint width, uint height)
@@ -257,6 +290,9 @@ class Playground {
     }
 
     ~Playground() {
+        for(Player *p : players)
+            delete p;
+
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -266,6 +302,15 @@ class Playground {
         toys.push_back(&d);
         d.draw(renderer);
         SDL_RenderPresent(renderer);
+
+        return *this;
+    }
+
+    Playground& with(optional<Player*> player) {
+        if(player) {
+            (*player)->initPlayer(*this);
+            players.push_back(*player);
+        }
 
         return *this;
     }
@@ -308,6 +353,15 @@ class Playground {
 
             if (!pause) {
                 newFrame();
+                for(Player *p : players) {
+                    list<Point> others;
+                    for(Player *p2 : players)
+                        if(p2 != p)
+                            others.push_back(p2->getPos());
+
+                    p->timePassed(others);
+                }
+
                 for(Toy *toy : toys) {
                     toy->timePassed(*this, 1);
                     toy->draw(renderer);
@@ -387,6 +441,7 @@ class Playground {
     SDL_Window *window;
     SDL_Renderer *renderer;
 
+    list<Player*> players;
     map<int,KeyBinding> downKeys;
     map<int,KeyBinding> keyBindings;
     vector<Segment> boundaries;
@@ -433,7 +488,6 @@ class Ball : public Toy {
             velocity = c.continuation;
         }
     }
-
 
     Ball& at(Point p) {
         pos = p;
@@ -572,6 +626,8 @@ class Bat : public Toy, public KeyListener {
         refresh();
     }
 
+    Point getPos() { return pos; }
+
     enum Actions {
         moveLeft, moveRight
     };
@@ -590,27 +646,90 @@ Mov initialBallMovement(Ball::Direction direction) {
     return Mov(dx, dy);
 }
 
-struct Player {
-    Player(Point position, Ball::Direction direction) {
-        ball = Ball().at(Mov(0, direction * 50).apply(position)).moving(initialBallMovement(direction));
+class GenericPlayer : public Player {
+    public:
+    GenericPlayer(Point position, Ball::Direction direction) {
+        ball = Ball().at(Mov(0, direction * 50).apply(position))
+                     .moving(initialBallMovement(direction));
         bat = Bat().at(position);
     }
+    ~GenericPlayer(){}
 
-    void registerWithKeys(Playground &pg, int lKey, int rKey) {
+    Point getPos() { return bat.getPos(); };
+
+    protected:
+    Bat bat;
+    Ball ball;
+};
+
+class LocalPlayer : public GenericPlayer {
+    public:
+    LocalPlayer(Point p, Ball::Direction d) : GenericPlayer(p, d) {}
+    ~LocalPlayer() {};
+
+    LocalPlayer *withKeys(int moveLeft, int moveRight) {
+        lKey = moveLeft;
+        rKey = moveRight;
+
+        return this;
+    }
+
+    void initPlayer(Playground &pg) {
         pg.with(ball).with(bat)
             .withKey(lKey, KeyBinding(&bat, (int)Bat::moveLeft))
             .withKey(rKey, KeyBinding(&bat, (int)Bat::moveRight));
     }
 
-    enum Direction {
-        up = -1, down = 1
-    };
+    void timePassed(list<Point> others) {}
 
-    Bat bat;
-    Ball ball;
+    private:
+    int lKey, rKey;
 };
 
+class RemotePlayer : public GenericPlayer {
+    public:
+    RemotePlayer(Point position, Ball::Direction direction)
+        : GenericPlayer (position, direction) {}
+    ~RemotePlayer() {}
+
+    void initPlayer(Playground &pg) {
+        pg.with(ball).with(bat);
+    }
+
+    void timePassed(list<Point> others) {
+        for(Point p : others)
+            cout << p.x << "/" << p.y << "\r";
+    }
+};
+
+enum Mode {
+    server, client, localmulti, single
+} mode = single;
+
+optional<Player*> playerForMode(Mode m) {
+    switch(m) {
+        case server:
+            return optional<Player*>(
+                    new RemotePlayer(Point(350, 50), Ball::down)
+            );
+        case localmulti:
+            return optional<Player*>(
+                    (new LocalPlayer(Point(350, 50), Ball::down))
+                        ->withKeys(SDLK_a, SDLK_d)
+            );
+        default:
+            return optional<Player*>();
+    }
+}
+
 int main(int argc, char **argv) {
+    if(argc > 1) {
+       if(strcmp(argv[1], "--server") == 0)
+           mode = server;
+       else if(strcmp(argv[1], "--localmulti") == 0)
+           mode = localmulti;
+    }
+
     vector<Toy*> boxes;
     for(uint x = 0; x < 8; x++)
         for(uint y = 0; y < 8; y++){
@@ -620,18 +739,13 @@ int main(int argc, char **argv) {
         }
 
     Playground playground(800,600);
-    playground.with(boxes);
-
-    Player a = Player(Point(350, 50), Ball::down);
-    a.registerWithKeys(playground, SDLK_LEFT, SDLK_RIGHT);
-
-    Player b = Player(Point(350, 550), Ball::up);
-    b.registerWithKeys(playground, SDLK_a, SDLK_d);
-
-    playground.play();
+    playground.with(boxes)
+              .with((new LocalPlayer(Point(350,550), Ball::up))
+                        ->withKeys(SDLK_LEFT, SDLK_RIGHT))
+              .with(playerForMode(mode))
+              .play();
 
     for(Toy* box : boxes)
         delete box;
-
 }
 
