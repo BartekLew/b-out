@@ -315,7 +315,7 @@ class Playground {
             }
             show();
 
-            while(SDL_GetTicks() < last_time + 12); // aim at 60fps
+            while(SDL_GetTicks() < last_time + 17); // aim at 60fps
             last_time = SDL_GetTicks();
         }
     }
@@ -446,6 +446,10 @@ class Ball : public Toy {
 
         return *this;
     }
+
+    enum Direction {
+        up = -1, down = 1
+    };
 
     private:
     uint    red = 0xff, green = 0xff, blue=0, r=10;
@@ -578,13 +582,33 @@ class Bat : public Toy, public KeyListener {
     uint    r = 150, g = 150, b = 150;
 };
 
-Mov initialBallMovement(int direction) {
+Mov initialBallMovement(Ball::Direction direction) {
     int dx = random(1, 5);
     if(random(0,1) == 0) dx = -dx;
 
     int dy = direction * (6 - abs(dx));
     return Mov(dx, dy);
 }
+
+struct Player {
+    Player(Point position, Ball::Direction direction) {
+        ball = Ball().at(Mov(0, direction * 50).apply(position)).moving(initialBallMovement(direction));
+        bat = Bat().at(position);
+    }
+
+    void registerWithKeys(Playground &pg, int lKey, int rKey) {
+        pg.with(ball).with(bat)
+            .withKey(lKey, KeyBinding(&bat, (int)Bat::moveLeft))
+            .withKey(rKey, KeyBinding(&bat, (int)Bat::moveRight));
+    }
+
+    enum Direction {
+        up = -1, down = 1
+    };
+
+    Bat bat;
+    Ball ball;
+};
 
 int main(int argc, char **argv) {
     vector<Toy*> boxes;
@@ -595,20 +619,19 @@ int main(int argc, char **argv) {
             boxes.push_back(&(b->at(Point(200+50*x, 200+20*y))));
         }
 
-    Bat bat1, bat2;
-    Playground(800,600)
-        .with(Ball().at(Point(400,100)).moving(initialBallMovement(1)))
-        .with(Ball().at(Point(400,500)).moving(initialBallMovement(-1)))
-        .with(boxes)
-        .with(bat1.at(Point(350,550)))
-        .withKey(SDLK_LEFT, KeyBinding(&bat1, (int)Bat::moveLeft))
-        .withKey(SDLK_RIGHT, KeyBinding(&bat1, (int)Bat::moveRight))
-        .with(bat2.at(Point(350,50)))
-        .withKey(SDLK_a, KeyBinding(&bat2, (int)Bat::moveLeft))
-        .withKey(SDLK_d, KeyBinding(&bat2, (int)Bat::moveRight))
-        .play();
+    Playground playground(800,600);
+    playground.with(boxes);
+
+    Player a = Player(Point(350, 50), Ball::down);
+    a.registerWithKeys(playground, SDLK_LEFT, SDLK_RIGHT);
+
+    Player b = Player(Point(350, 550), Ball::up);
+    b.registerWithKeys(playground, SDLK_a, SDLK_d);
+
+    playground.play();
 
     for(Toy* box : boxes)
         delete box;
+
 }
 
