@@ -7,3 +7,8 @@ b-out: b-out.cpp net.o
 
 net.o: net.cpp
 	${CPP} -c $^ -o $@ ${HEADS}
+
+clean:
+	rm b-out net.o
+
+.PHONY: clean

@@ -6,6 +6,8 @@
 #include <random>
 #include <iostream>
 
+#include "net.hpp"
+
 using namespace std;
 
 class bad_optional : public exception {};
@@ -63,10 +65,15 @@ uint read16(const void *buff) {
         + (((uint)((char*) buff)[1]) << 8);
 }
 
+struct WrongFormat {};
+
 struct Point {
     Point(): x(0), y(0) {}
     Point(uint x, uint y): x(x), y(y) {}
     Point(string bin) {
+        if(bin.size() != 4)
+            throw WrongFormat();
+
         x = read16(bin.data());
         y = read16(bin.data()+2);
     };
@@ -79,11 +86,11 @@ struct Point {
     }
 
     string bin() {
-        char    data[4];
-        write16(data, x);
-        write16(data+2, y);
+        char dst[4];
+        write16(dst, x);
+        write16(dst+2, y);
 
-        return string(data, 4);
+        return string(dst, 4);
     }
         
     uint x, y;
@@ -260,9 +267,13 @@ class Player {
     public:
     virtual ~Player() {};
     virtual void initPlayer(Playground &pg) = 0;
-    virtual void timePassed(list<Point> state) = 0;
+    virtual Point timePassed(Point other) = 0;
+    virtual bool wantsUpdates() {return false;}
     virtual Point getPos() = 0;
+    virtual void setPos(Point pos) = 0;
 };
+
+struct TooManyPlayers {};
 
 class Playground {
     public:
@@ -308,6 +319,9 @@ class Playground {
 
     Playground& with(optional<Player*> player) {
         if(player) {
+            if(players.size() == 2)
+                throw TooManyPlayers();
+            
             (*player)->initPlayer(*this);
             players.push_back(*player);
         }
@@ -353,13 +367,20 @@ class Playground {
 
             if (!pause) {
                 newFrame();
-                for(Player *p : players) {
-                    list<Point> others;
-                    for(Player *p2 : players)
-                        if(p2 != p)
-                            others.push_back(p2->getPos());
+                if(players.size() == 2) {
+                    Player *a = NULL, *b = NULL;
+                    if(players.front()->wantsUpdates()) {
+                        a = players.front();
+                        b = players.back();
+                    } else if (players.back()->wantsUpdates()) {
+                        a = players.back();
+                        b = players.front();
+                    }
 
-                    p->timePassed(others);
+                    if(a != NULL) {
+                        Point p = a->timePassed(b->getPos());
+                        a->setPos(Point(p.x, h - p.y));
+                    }
                 }
 
                 for(Toy *toy : toys) {
@@ -656,6 +677,7 @@ class GenericPlayer : public Player {
     ~GenericPlayer(){}
 
     Point getPos() { return bat.getPos(); };
+    void setPos(Point pos) { bat.at(pos); }
 
     protected:
     Bat bat;
@@ -680,7 +702,9 @@ class LocalPlayer : public GenericPlayer {
             .withKey(rKey, KeyBinding(&bat, (int)Bat::moveRight));
     }
 
-    void timePassed(list<Point> others) {}
+    Point timePassed(Point other) {
+        return Point(0,0);
+    }
 
     private:
     int lKey, rKey;
@@ -692,30 +716,74 @@ class RemotePlayer : public GenericPlayer {
         : GenericPlayer (position, direction) {}
     ~RemotePlayer() {}
 
+    bool wantsUpdates() {return true;}
+
     void initPlayer(Playground &pg) {
         pg.with(ball).with(bat);
     }
+};
 
-    void timePassed(list<Point> others) {
-        for(Point p : others)
-            cout << p.x << "/" << p.y << "\r";
+class GuestRemote : public RemotePlayer {
+    public:
+    GuestRemote(NetServer *conn, Point position, Ball::Direction direction)
+        : RemotePlayer (position, direction), conn(conn) {}
+    ~GuestRemote() { delete conn; }
+
+    Point timePassed(Point other) {
+        conn->send(other.bin());
+        Point pt = Point(conn->receive());
+        cout << "remote @ " << pt.x << "/" << pt.y << endl;
+        return pt;
     }
+
+    private:
+    NetServer *conn;
+};
+
+class HostRemote : public RemotePlayer {
+    public:
+    HostRemote(NetClient *conn, Point position, Ball::Direction direction)
+       : RemotePlayer(position, direction), conn(conn) {} 
+    ~HostRemote() { delete conn; }
+
+    Point timePassed(Point other) {
+        Point resp = Point(conn->receive());
+        cout << "remote @ " << resp.x << "/" << resp.y << endl;
+        conn->send(other.bin());
+        return resp;
+    }
+
+    private:
+    NetClient *conn;
 };
 
 enum Mode {
     server, client, localmulti, single
 } mode = single;
 
-optional<Player*> playerForMode(Mode m) {
+optional<Player*> playerForMode(Mode m, char *arg) {
     switch(m) {
         case server:
+            cout << "Waiting for second player…" << endl;
             return optional<Player*>(
-                    new RemotePlayer(Point(350, 50), Ball::down)
+                    new GuestRemote(
+                            new NetServer(),
+                            Point(350, 50),
+                            Ball::down
+                    )
             );
         case localmulti:
             return optional<Player*>(
                     (new LocalPlayer(Point(350, 50), Ball::down))
                         ->withKeys(SDLK_a, SDLK_d)
+            );
+        case client:
+            return optional<Player*>(
+                    new HostRemote(
+                            new NetClient(string(arg)),
+                            Point(350, 50),
+                            Ball::down
+                    )
             );
         default:
             return optional<Player*>();
@@ -728,6 +796,8 @@ int main(int argc, char **argv) {
            mode = server;
        else if(strcmp(argv[1], "--localmulti") == 0)
            mode = localmulti;
+       else
+           mode = client;
     }
 
     vector<Toy*> boxes;
@@ -742,7 +812,7 @@ int main(int argc, char **argv) {
     playground.with(boxes)
               .with((new LocalPlayer(Point(350,550), Ball::up))
                         ->withKeys(SDLK_LEFT, SDLK_RIGHT))
-              .with(playerForMode(mode))
+              .with(playerForMode(mode, argv[1]))
               .play();
 
     for(Toy* box : boxes)
