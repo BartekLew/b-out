@@ -25,6 +25,8 @@ class NetConnection {
     protected:
     void commonInit();
 
+    Uint32    myPacketNo = 1,
+              hisPacketNo = 0;
     UDPpacket *packet;
     UDPsocket connection;
 };

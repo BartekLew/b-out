@@ -11,7 +11,7 @@ NetException::NetException() {
 NetConnection::NetConnection(uint port) {
     if(SDLNet_Init() < 0
        || !(connection = SDLNet_UDP_Open(port))
-       || !(packet = SDLNet_AllocPacket(4)))
+       || !(packet = SDLNet_AllocPacket(8)))
        throw NetException();
 }
 
@@ -22,24 +22,36 @@ NetConnection::~NetConnection() {
 }
 
 void NetConnection::send(string message) {
-    packet->len = 4;
-    memcpy(packet->data, message.c_str(), 4);
+    packet->len = 8;
+    memcpy(packet->data, &myPacketNo, 4);
+    myPacketNo++;
+    memcpy(packet->data+4, message.c_str(), 4);
     if(SDLNet_UDP_Send(connection, -1, packet) == 0)
         throw NetException();
 }
 
 string NetConnection::receive() {
-    time_t started_at = time(NULL);
-    while(SDLNet_UDP_Recv(connection, packet) == 0) {
-        time_t now = time(NULL);
-        if(now - started_at > 5)
-            throw RecvTimeout();
+    bool success = false;
+    while(!success) {
+        time_t started_at = time(NULL);
+        while(SDLNet_UDP_Recv(connection, packet) == 0) {
+            time_t now = time(NULL);
+            if(now - started_at > 5)
+                throw RecvTimeout();
+        }
+
+        uint counter;
+        memcpy(&counter, packet->data, 4);
+        if(counter > hisPacketNo) {
+            success = true;
+            hisPacketNo = counter;
+        }
     }
-    return string((char *)(packet->data), 4);
+    return string((char *)(packet->data) + 4, 4);
 }
 
 void NetServer::establishConnection() {
-    while(1) {
+    for(uint i = 0; i < 10; i++) {
         try {
             receive();
             return;
@@ -64,7 +76,7 @@ NetClient::NetClient(string hostname) : NetConnection(4241) {
 }
 
 void NetClient::establishConnection() {
-    SDLNet_UDP_Send(connection, -1, packet);
+    send("ping");
 }
 
 NetClient::~NetClient(){}

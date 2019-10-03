@@ -61,8 +61,8 @@ void write16(void *buff, uint n) {
 }
 
 uint read16(const void *buff) {
-    return ((uint)((char*) buff)[0])
-        + (((uint)((char*) buff)[1]) << 8);
+    return (((uint)((char*) buff)[0]) & 0xff)
+        + ((((uint)((char*) buff)[1]) << 8) & 0xff00);
 }
 
 struct WrongFormat {};
@@ -378,8 +378,7 @@ class Playground {
                     }
 
                     if(a != NULL) {
-                        Point p = a->timePassed(b->getPos());
-                        a->setPos(Point(p.x, h - p.y));
+                        a->setPos(a->timePassed(b->getPos()));
                     }
                 }
 
@@ -660,9 +659,7 @@ class Bat : public Toy, public KeyListener {
 };
 
 Mov initialBallMovement(Ball::Direction direction) {
-    int dx = random(1, 5);
-    if(random(0,1) == 0) dx = -dx;
-
+    int dx = 3;
     int dy = direction * (6 - abs(dx));
     return Mov(dx, dy);
 }
@@ -731,9 +728,7 @@ class GuestRemote : public RemotePlayer {
 
     Point timePassed(Point other) {
         conn->send(other.bin());
-        Point pt = Point(conn->receive());
-        cout << "remote @ " << pt.x << "/" << pt.y << endl;
-        return pt;
+        return Point(conn->receive());
     }
 
     private:
@@ -748,7 +743,6 @@ class HostRemote : public RemotePlayer {
 
     Point timePassed(Point other) {
         Point resp = Point(conn->receive());
-        cout << "remote @ " << resp.x << "/" << resp.y << endl;
         conn->send(other.bin());
         return resp;
     }
@@ -781,8 +775,8 @@ optional<Player*> playerForMode(Mode m, char *arg) {
             return optional<Player*>(
                     new HostRemote(
                             new NetClient(string(arg)),
-                            Point(350, 50),
-                            Ball::down
+                            Point(350, 550),
+                            Ball::up
                     )
             );
         default:
@@ -810,7 +804,9 @@ int main(int argc, char **argv) {
 
     Playground playground(800,600);
     playground.with(boxes)
-              .with((new LocalPlayer(Point(350,550), Ball::up))
+              .with(((mode == client)?
+                          new LocalPlayer(Point(350,50), Ball::down)
+                          :new LocalPlayer(Point(350,550), Ball::up))
                         ->withKeys(SDLK_LEFT, SDLK_RIGHT))
               .with(playerForMode(mode, argv[1]))
               .play();
