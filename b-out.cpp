@@ -317,6 +317,7 @@ class Player {
     virtual bool wantsUpdates() {return false;}
     virtual Point getPos() = 0;
     virtual void setPos(Point pos) = 0;
+    virtual void loose() = 0;
 };
 
 // Exception thrown when trying to add third player.
@@ -381,6 +382,10 @@ class Playground {
             with(*t);
 
         return *this;
+    }
+
+    void ballInAGoal(Player *p) {
+        p->loose();
     }
 
     void play() {
@@ -522,40 +527,44 @@ class Ball : public Toy {
     public:
 
     void draw(SDL_Renderer *renderer) {
-        SDL_SetRenderDrawColor(renderer, red, green, blue, 255);    
+        if(visible) {
+            SDL_SetRenderDrawColor(renderer, red, green, blue, 255);    
 
-        for(uint dy = 1; dy < r; dy++) {
-            /* Draw circle line by line.
-             *
-             * Formula (for point 0,0) is: r^2 = x^2 + y^2
-             *
-             * now we have y and r known, so:
-             * x = +/- sqrt(r^2 - y^2)
-             *
-             * Of course we have to apply offset (x,y),
-             * so I operate on dx and dy rather than x & y.*/
+            for(uint dy = 1; dy < r; dy++) {
+                /* Draw circle line by line.
+                 *
+                 * Formula (for point 0,0) is: r^2 = x^2 + y^2
+                 *
+                 * now we have y and r known, so:
+                 * x = +/- sqrt(r^2 - y^2)
+                 *
+                 * Of course we have to apply offset (x,y),
+                 * so I operate on dx and dy rather than x & y.*/
 
-            uint dx = floor(sqrt(r*r - dy*dy));
-            SDL_RenderDrawLine(renderer,
-                pos.x - dx, pos.y - dy, pos.x + dx, pos.y - dy
-            );
-            SDL_RenderDrawLine(renderer,
-                pos.x - dx, pos.y + dy, pos.x + dx, pos.y + dy
-            );
+                uint dx = floor(sqrt(r*r - dy*dy));
+                SDL_RenderDrawLine(renderer,
+                        pos.x - dx, pos.y - dy, pos.x + dx, pos.y - dy
+                        );
+                SDL_RenderDrawLine(renderer,
+                        pos.x - dx, pos.y + dy, pos.x + dx, pos.y + dy
+                        );
+            }
+
+            SDL_RenderDrawLine(renderer, pos.x - r, pos.y, pos.x + r, pos.y);
         }
-
-        SDL_RenderDrawLine(renderer, pos.x - r, pos.y, pos.x + r, pos.y);
     }
     
     void timePassed(Playground &pg, uint dt) {
-        Point dest = velocity.apply(pos);
+        if(visible) {
+            Point dest = velocity.apply(pos);
 
-        Collision c = pg.obstacle(Segment(pos, dest), r);
-        if(!c.really) {
-            pos = dest;
-        } else {
-            pos = c.continuation.apply(c.where);
-            velocity = c.continuation;
+            Collision c = pg.obstacle(Segment(pos, dest), r);
+            if(!c.really) {
+                pos = dest;
+            } else {
+                pos = c.continuation.apply(c.where);
+                velocity = c.continuation;
+            }
         }
     }
 
@@ -571,6 +580,11 @@ class Ball : public Toy {
         return *this;
     }
 
+    void hide() {
+        visible = false;
+        moving(Mov(0,0));
+    }
+
     enum Direction {
         up = -1, down = 1
     };
@@ -579,6 +593,7 @@ class Ball : public Toy {
     uint    red = 0xff, green = 0xff, blue=0, r=10;
     Point   pos = Point(400,300);
     Mov     velocity = Mov(0,0);
+    bool    visible = true;
 };
 
 class Box : public Toy {
@@ -654,14 +669,16 @@ class Bat : public Toy, public KeyListener {
 
     void timePassed(Playground &pg, uint dt) {}
     void draw(SDL_Renderer *renderer) {
-        SDL_Rect rect;
-        rect.x = pos.x;
-        rect.y = pos.y;
-        rect.w = w;
-        rect.h = h;
+        if(visible) {
+            SDL_Rect rect;
+            rect.x = pos.x;
+            rect.y = pos.y;
+            rect.w = w;
+            rect.h = h;
 
-        SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-        SDL_RenderFillRect(renderer, &rect);
+            SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+            SDL_RenderFillRect(renderer, &rect);
+        }
     }
 
     Bat &at(Point p) {
@@ -696,6 +713,11 @@ class Bat : public Toy, public KeyListener {
         refresh();
     }
 
+    void hide() {
+        bounds.clear();
+        visible = false;
+    }
+
     Point getPos() { return pos; }
 
     enum Actions {
@@ -706,6 +728,7 @@ class Bat : public Toy, public KeyListener {
     Point   pos = Point(350,750);
     uint    w = 100, h=10;
     uint    r = 150, g = 150, b = 150;
+    bool    visible = true;
 };
 
 Mov initialBallMovement(Ball::Direction direction) {
@@ -714,21 +737,61 @@ Mov initialBallMovement(Ball::Direction direction) {
     return Mov(dx, dy);
 }
 
+class Goal : public Toy {
+    public:
+    Goal(Playground &pg, Player *player, Ball::Direction side)
+            : pg(pg), player(player) {
+        switch(side) {
+            case Ball::up:
+                bounds.push_back(Segment(Point(0, 590), Point(800, 590)));
+                break;
+            case Ball::down:
+                bounds.push_back(Segment(Point(0, 10), Point(800, 10)));
+                break;
+        }
+    }
+
+    void draw(SDL_Renderer *r) {}
+    void timePassed(Playground &pg, uint dt) {}
+    void collision() {
+        pg.ballInAGoal(player);
+    }
+    bool destroyed() { return false; }
+
+    private:
+    Playground &pg;
+    Player *player;
+};
+
 class GenericPlayer : public Player {
     public:
-    GenericPlayer(Point position, Ball::Direction direction) {
+    GenericPlayer(Point position, Ball::Direction direction) 
+            :dir(direction), position(position) {
         ball = Ball().at(Mov(0, direction * 50).apply(position))
                      .moving(initialBallMovement(direction));
         bat = Bat().at(position);
     }
-    ~GenericPlayer(){}
+    ~GenericPlayer(){
+        if(goal) delete goal;
+    }
 
     Point getPos() { return bat.getPos(); };
     void setPos(Point pos) { bat.at(pos); }
 
+    void loose() {
+        if(chances-- <= 0) {
+            ball.hide();
+            bat.hide();
+        }
+    }
+
     protected:
     Bat bat;
     Ball ball;
+    Goal *goal = NULL;
+    Ball::Direction dir;
+    Point position;
+    int chances = 3;
 };
 
 class LocalPlayer : public GenericPlayer {
@@ -744,7 +807,7 @@ class LocalPlayer : public GenericPlayer {
     }
 
     void initPlayer(Playground &pg) {
-        pg.with(ball).with(bat)
+        pg.with(ball).with(bat).with(*(goal = new Goal(pg, this, dir)))
             .withKey(lKey, KeyBinding(&bat, (int)Bat::moveLeft))
             .withKey(rKey, KeyBinding(&bat, (int)Bat::moveRight));
     }
@@ -766,7 +829,7 @@ class RemotePlayer : public GenericPlayer {
     bool wantsUpdates() {return true;}
 
     void initPlayer(Playground &pg) {
-        pg.with(ball).with(bat);
+        pg.with(ball).with(bat).with(*(goal = new Goal(pg, this, dir)));
     }
 };
 
