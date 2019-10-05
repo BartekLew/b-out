@@ -67,6 +67,10 @@ uint read16(const void *buff) {
 
 struct WrongFormat {};
 
+
+/* Point, Line, Segment, Mov. Classes to be considered in
+ * sense of analytical geometry. */
+
 struct Point {
     Point(): x(0), y(0) {}
     Point(uint x, uint y): x(x), y(y) {}
@@ -215,8 +219,38 @@ struct Segment {
     Point a, b;
 };
 
+/* Game mechanics.
+ * Playground is a central class, it defines comminication
+ * with graphics API, it coordinates all elements of the
+ * game. Playground.play() function contains program's
+ * main event loop. */
+
 class Playground;
 
+
+/* Toy is an interface for all things displayed on the screen.
+ *  draw() function called by playground to draw object on the
+ *         screen.
+ *
+ *  timePassed() function called by playground to notify object
+ *               that it should update its state. For example,
+ *               apply its movement. dt means how much time
+ *               passed, usually 1 unit.
+ *
+ *  collision() function called by playground to notify that
+ *              there was collision with it. Currently collision()
+ *              may happen only with a ball and ball is not notified,
+ *              because it asks playground if it can move to given
+ *              point, so that it knows.
+ *
+ *  destroyed() function called by playground to ask if object should
+ *              be removed. Usually a box after certain number of
+ *              collisions.
+ *
+ *  boundaries() function called by playground to get segments that
+ *               represent object boundaries to be used in collision
+ *               detection.
+ */
 class Toy {
     public:
     virtual void draw(SDL_Renderer *renderer) = 0;
@@ -263,6 +297,18 @@ struct KeyBinding {
     int         action;
 };
 
+/* Interface that represents a player.
+ * It's common for local and remote players. It's
+ * responsible to place bat and a ball in the playground.
+ * It also handles network communication if applicable.
+ *  initPlayer() called by playground asking to add objects
+ *               to it.
+ *  timePassed() called by playground each iteration of main
+ *               loop. It passes position of opponents bat and
+ *               asks position of this player's bat. It is an
+ *               interface for network communication. It is
+ *               called only if wantsUpdates() returns true.
+ */
 class Player {
     public:
     virtual ~Player() {};
@@ -273,6 +319,7 @@ class Player {
     virtual void setPos(Point pos) = 0;
 };
 
+// Exception thrown when trying to add third player.
 struct TooManyPlayers {};
 
 class Playground {
@@ -394,6 +441,9 @@ class Playground {
         }
     }
 
+    /* Collision detecting function. Route is a vector that represents
+     * movement would happend during current portion of time. r represents
+     * radious of the calling object. */
     Collision obstacle(Segment route, uint r) {
         optional<Point> intersection;
         Segment *is = NULL;
@@ -755,6 +805,8 @@ enum Mode {
     server, client, localmulti, single
 } mode = single;
 
+/* This function decides if there should be second player and
+ * constructs its object depending on game mode. */
 optional<Player*> playerForMode(Mode m, char *arg) {
     switch(m) {
         case server:
